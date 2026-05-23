@@ -1,0 +1,6 @@
+{
+  "name": "BLACK SIGNAL",
+  "description": "Plataforma de Comunicação Tática Segura - Rádio PTT, E2EE e Identidade Anônima.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Orbitron:wght@400;700&family=Inter:wght@400;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Orbitron", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  
+  --color-tactical-green: #00ff41;
+  --color-tactical-green-dim: #003b00;
+  --color-tactical-bg: #0a0a0a;
+  --color-tactical-surface: #121212;
+  --color-tactical-border: #1a1a1a;
+  --color-tactical-amber: #ffb000;
+  --color-tactical-red: #ff3e3e;
+}
+
+@layer base {
+  body {
+    @apply bg-tactical-bg text-tactical-green font-mono selection:bg-tactical-green/30 overflow-hidden;
+  }
+}
+
+.custom-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+.tactical-grid {
+  background-image: 
+    linear-gradient(to right, rgba(0, 255, 65, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 255, 65, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.scanline {
+  width: 100%;
+  height: 100px;
+  z-index: 100;
+  background: linear-gradient(0deg, rgba(0, 255, 65, 0) 0%, rgba(0, 255, 65, 0.1) 50%, rgba(0, 255, 65, 0) 100%);
+  opacity: 0.1;
+  position: absolute;
+  bottom: 100%;
+  animation: scan 4s linear infinite;
+}
+
+@keyframes scan {
+  0% { bottom: 100%; }
+  100% { bottom: -100px; }
+}
+
+.crt-flicker {
+  animation: flicker 0.15s infinite;
+}
+
+@keyframes flicker {
+  0% { opacity: 0.97; }
+  100% { opacity: 1; }
+}

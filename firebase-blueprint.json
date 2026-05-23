@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Minimalist tactical operator profile",
+      "type": "object",
+      "properties": {
+        "callsign": {
+          "type": "string",
+          "description": "Tactical callsign (e.g. NOMAD_41)"
+        },
+        "trustLevel": {
+          "type": "string",
+          "description": "Operational trust level",
+          "enum": ["Básico", "Operacional", "Veterano", "Comunidade"]
+        },
+        "region": {
+          "type": "string",
+          "description": "Operational region"
+        },
+        "encryptionStatus": {
+          "type": "string",
+          "description": "Current encryption status",
+          "enum": ["Ativa", "Inativa"]
+        },
+        "activityStatus": {
+          "type": "string",
+          "description": "Operator status",
+          "enum": ["Online", "Offline", "Away"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["callsign", "trustLevel", "encryptionStatus", "activityStatus"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection indexed by Auth UID"
+    }
+  }
+}
