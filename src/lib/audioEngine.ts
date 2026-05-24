@@ -102,6 +102,42 @@ export class AudioEngine {
     osc.stop(this.context.currentTime + duration);
   }
 
+  playNoise(duration: number = 0.2, volume: number = 0.08) {
+    if (this.context.state === 'suspended') {
+      this.context.resume().catch(() => {});
+    }
+    try {
+      const bufferSize = this.context.sampleRate * duration;
+      const buffer = this.context.createBuffer(1, bufferSize, this.context.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      const noise = this.context.createBufferSource();
+      noise.buffer = buffer;
+
+      // Bandpass filter to make it sound like gritty tactical radio static (squelch burst)
+      const noiseFilter = this.context.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.setValueAtTime(1200, this.context.currentTime);
+      noiseFilter.Q.setValueAtTime(1.2, this.context.currentTime);
+
+      const gain = this.context.createGain();
+      gain.gain.setValueAtTime(volume, this.context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.context.currentTime + duration);
+
+      noise.connect(noiseFilter);
+      noiseFilter.connect(gain);
+      gain.connect(this.context.destination);
+
+      noise.start();
+      noise.stop(this.context.currentTime + duration);
+    } catch (e) {
+      console.error('Failed to play white noise', e);
+    }
+  }
+
   close() {
     this.stream?.getTracks().forEach(track => track.stop());
     this.context.close();

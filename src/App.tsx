@@ -196,12 +196,14 @@ export default function App() {
       setIsRxActive(true);
       setRxFrom(from);
       audioEngine.current?.playBeep(440, 0.05); // Receive beep
+      audioEngine.current?.playNoise(0.18, 0.06); // RX Start white noise squelch
     });
 
     newSocket.on('rx-stop', () => {
       setIsRxActive(false);
       setRxFrom(null);
       audioEngine.current?.playBeep(330, 0.05); // End receive beep
+      audioEngine.current?.playNoise(0.25, 0.08); // RX End white noise squelch
     });
 
     return () => {
