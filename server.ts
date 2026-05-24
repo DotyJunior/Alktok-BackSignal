@@ -31,12 +31,20 @@ async function startServer() {
     console.log(`[CONNECT] User attached: ${socket.id}`);
 
     socket.on("join-network", ({ callsign }) => {
+      // Find and remove any existing operator details for the same callsign (stale sessions)
+      for (const [key, val] of operators.entries()) {
+        if (val.callsign === callsign) {
+          operators.delete(key);
+        }
+      }
+
       operators.set(socket.id, { 
         id: socket.id, 
         callsign, 
         channel: null, 
         status: "IDLE", 
-        silent: false 
+        silent: false,
+        online: true
       });
       socket.emit("network-synced", { channels, operators: Array.from(operators.values()) });
       io.emit("log-update", `[${new Date().toLocaleTimeString()}] OPERADOR ${callsign} CONECTADO`);
@@ -47,6 +55,7 @@ async function startServer() {
       const op = operators.get(socket.id);
       if (op) {
         op.channel = channelId;
+        op.online = true;
         socket.join(channelId);
         io.to(channelId).emit("log-update", `[${new Date().toLocaleTimeString()}] ${op.callsign} ENTROU NO CANAL ${channelId}`);
         io.emit("operators-update", Array.from(operators.values()));
@@ -57,6 +66,7 @@ async function startServer() {
       const op = operators.get(socket.id);
       if (op && op.channel) {
         op.status = "TX";
+        op.online = true;
         socket.to(op.channel).emit("rx-start", { from: op.callsign });
         io.emit("operators-update", Array.from(operators.values()));
       }
@@ -66,6 +76,7 @@ async function startServer() {
       const op = operators.get(socket.id);
       if (op && op.channel) {
         op.status = "IDLE";
+        op.online = true;
         socket.to(op.channel).emit("rx-stop");
         io.emit("operators-update", Array.from(operators.values()));
       }
@@ -75,7 +86,9 @@ async function startServer() {
       const op = operators.get(socket.id);
       if (op) {
         io.emit("log-update", `[${new Date().toLocaleTimeString()}] ${op.callsign} DESCONECTADO`);
-        operators.delete(socket.id);
+        // Mark as offline instead of purging so other operators see status transition
+        op.online = false;
+        op.status = "IDLE";
         io.emit("operators-update", Array.from(operators.values()));
       }
     });

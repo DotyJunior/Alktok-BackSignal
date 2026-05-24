@@ -214,7 +214,7 @@ export default function App() {
   useEffect(() => {
     setChannels(prev => prev.map(ch => ({
       ...ch,
-      ops: operators.filter(op => op.channel === ch.id).length
+      ops: operators.filter(op => op.channel === ch.id && op.online !== false).length
     })));
   }, [operators]);
 
@@ -478,21 +478,62 @@ export default function App() {
                         <span className="text-xs font-bold">{profile.callsign}</span>
                         <span className="text-[9px] opacity-30 text-white">(VOCÊ)</span>
                       </div>
-                      <div className="text-[10px] flex items-center gap-2 opacity-60">
-                        <Radio className="w-3 h-3" /> {isPttActive ? 'TX' : 'STANDBY'} • {selectedChannel.id.toUpperCase()}
+                      <div className="text-[10px] flex items-center gap-2 text-tactical-green/85">
+                        <span className="w-1 h-1 rounded-full bg-tactical-green animate-pulse" />
+                        <span className="font-mono font-bold text-[8px] tracking-widest">ONLINE</span>
+                        <span className="opacity-30">•</span>
+                        <span className="opacity-80 flex items-center gap-1">
+                          <Radio className="w-3 h-3" /> {isPttActive ? 'TX' : 'STANDBY'}
+                        </span>
                       </div>
                     </div>
-                    {operators.filter(op => op.channel === selectedChannel.id && op.id !== socket?.id).map(op => (
-                      <div key={op.id} className="flex items-center justify-between p-2 rounded bg-white/5 border border-white/5 opacity-80">
-                        <div className="flex items-center gap-2">
-                           <div className={cn("w-2 h-2 rounded-full", op.status === 'TX' ? 'bg-tactical-amber animate-pulse' : 'bg-tactical-green/50')} />
-                           <span className="text-xs">{op.callsign}</span>
+                    {operators.filter(op => op.channel === selectedChannel.id && op.id !== socket?.id).map(op => {
+                      const isOpOnline = op.online !== false;
+                      return (
+                        <div 
+                          key={op.id} 
+                          className={cn(
+                            "flex items-center justify-between p-2 rounded transition-all duration-300",
+                            isOpOnline 
+                              ? "bg-white/5 border border-white/5 opacity-90" 
+                              : "bg-black/25 border border-white/5 opacity-50"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={cn(
+                              "w-2 h-2 rounded-full",
+                              !isOpOnline 
+                                ? "bg-zinc-700" 
+                                : op.status === 'TX' 
+                                  ? 'bg-tactical-amber animate-pulse' 
+                                  : 'bg-tactical-green/60'
+                            )} />
+                            <span className={cn("text-xs", !isOpOnline && "text-zinc-500 line-through decoration-zinc-800")}>{op.callsign}</span>
+                          </div>
+                          <div className="text-[10px] flex items-center gap-2">
+                            {isOpOnline ? (
+                              <div className="flex items-center gap-2 text-tactical-green/60">
+                                <span className="w-1 h-1 rounded-full bg-tactical-green animate-pulse" />
+                                <span className="font-mono font-bold text-[8px] tracking-widest">ONLINE</span>
+                                <span className="opacity-30 text-white">•</span>
+                                <span className="opacity-80 text-white flex items-center gap-1">
+                                  <Radio className="w-2.5 h-2.5" /> {op.status}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-red-500/50">
+                                <span className="w-1 h-1 rounded-full bg-zinc-700" />
+                                <span className="font-mono font-bold text-[8px] tracking-widest">OFFLINE</span>
+                                <span className="opacity-30 text-white">•</span>
+                                <span className="opacity-50 text-white flex items-center gap-1">
+                                  <Radio className="w-2.5 h-2.5 text-zinc-800" /> COLD
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-[10px] flex items-center gap-2 opacity-50">
-                          <Radio className="w-3 h-3" /> {op.status} • {selectedChannel.id.toUpperCase()}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
