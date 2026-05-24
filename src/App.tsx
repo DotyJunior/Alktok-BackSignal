@@ -116,6 +116,38 @@ export default function App() {
   const [showPanicDialog, setShowPanicDialog] = useState(false);
   const [isPanicking, setIsPanicking] = useState(false);
 
+  // Recovery Profile states
+  const [profileNotFound, setProfileNotFound] = useState(false);
+  const [recoveryCallsign, setRecoveryCallsign] = useState(generateCallsign());
+  const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+
+  const handleRecoverProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setIsRecovering(true);
+    setRecoveryError(null);
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      const newProfile: any = {
+        callsign: (recoveryCallsign.trim() || generateCallsign()).toUpperCase(),
+        trustLevel: 'Básico',
+        region: '',
+        encryptionStatus: 'Ativa',
+        activityStatus: 'Online',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      await setDoc(userDocRef, newProfile);
+      setProfileNotFound(false);
+    } catch (err: any) {
+      console.error('Error recovering profile:', err);
+      setRecoveryError('Falha ao restaurar o perfil. Verifique sua conexão.');
+    } finally {
+      setIsRecovering(false);
+    }
+  };
+
   // App State
   const [currentView, setCurrentView] = useState<View>('channels');
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
@@ -152,23 +184,57 @@ export default function App() {
     };
     testConnection();
 
+    let unsubSnap: (() => void) | null = null;
+    let timer: NodeJS.Timeout | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
+      if (unsubSnap) {
+        unsubSnap();
+        unsubSnap = null;
+      }
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+
       if (firebaseUser) {
         setAuthState('authenticated');
         // Fetch profile
         const userDocRef = doc(db, 'users', firebaseUser.uid);
-        onSnapshot(userDocRef, (docSnap) => {
+        unsubSnap = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
+            if (timer) {
+              clearTimeout(timer);
+              timer = null;
+            }
             setProfile(docSnap.data() as UserProfile);
+            setProfileNotFound(false);
+          } else {
+            if (timer) {
+              clearTimeout(timer);
+            }
+            timer = setTimeout(() => {
+              setProfileNotFound(true);
+            }, 1800);
           }
-        }, (err) => handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`));
+        }, (err) => {
+          handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
+          setProfileNotFound(true);
+        });
       } else {
         setAuthState('landing');
+        setProfile(null);
+        setProfileNotFound(false);
       }
       setIsAuthLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribe();
+      if (unsubSnap) unsubSnap();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   // Initialize Socket and Audio
@@ -248,6 +314,7 @@ export default function App() {
     setIsPttActive(false);
     socket.emit('ptt-stop');
     audioEngine.current?.playBeep(660, 0.1); // PTT Stop beep (lower)
+    audioEngine.current?.stopMic(); // Stop and release the mic tracks completely on release
     
     if (analyzerRef.current) clearInterval(analyzerRef.current);
     setWaveformData(new Uint8Array(0));
@@ -291,10 +358,80 @@ export default function App() {
           {authState === 'register' && <AuthForm key="register" mode="register" onToggle={() => setAuthState('login')} onSuccess={() => setAuthState('authenticated')} />}
           {authState === 'login' && <AuthForm key="login" mode="login" onToggle={() => setAuthState('register')} onSuccess={() => setAuthState('authenticated')} />}
           {user && !profile && (
-            <div key="loading-profile" className="flex flex-col h-full items-center justify-center z-10 gap-4">
-               <RefreshCcw className="w-8 h-8 text-tactical-green animate-spin" />
-               <span className="text-[10px] font-bold tracking-widest text-tactical-green animate-pulse uppercase">Recuperando Perfil Tático...</span>
-            </div>
+            profileNotFound ? (
+              <div key="profile-not-found" className="flex flex-col h-full justify-center p-6 z-10 gap-6">
+                <div className="border border-tactical-red bg-tactical-red/5 p-4 rounded flex flex-col gap-3 font-mono">
+                  <div className="flex items-center gap-2 text-tactical-red font-bold text-xs tracking-wider animate-pulse">
+                    <span>⚠️</span>
+                    <span>ALERTA: PERFIL INEXISTENTE</span>
+                  </div>
+                  <p className="text-[10px] text-tactical-red/85 leading-relaxed uppercase">
+                    O perfil tático de rádio correspondente a esta conta não pôde ser recuperado do banco de dados distribuído de canais do Black Signal.
+                  </p>
+                  <p className="text-[10px] opacity-60 leading-relaxed uppercase">
+                    Causa provável: Uso recente do protocolo de autodestruição "PÂNICO", exclusão manual ou falha cadastral de sincronização.
+                  </p>
+                </div>
+
+                <form onSubmit={handleRecoverProfile} className="flex flex-col gap-4 font-mono">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-semibold text-tactical-green uppercase tracking-wider">
+                      Crie um novo Codinome de Operador para Reativar o rádio:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        required
+                        maxLength={18}
+                        value={recoveryCallsign}
+                        onChange={(e) => setRecoveryCallsign(e.target.value)}
+                        placeholder="Ex: ALPHA-1"
+                        className="flex-1 px-3 py-2 bg-black border border-tactical-green/30 text-tactical-green text-xs rounded focus:outline-none focus:border-tactical-green uppercase tracking-widest"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setRecoveryCallsign(generateCallsign())}
+                        className="px-3 border border-tactical-green/30 text-tactical-green hover:border-tactical-green hover:bg-tactical-green/10 text-xs rounded flex items-center justify-center font-bold"
+                        title="Gerar Aleatório"
+                      >
+                        🔀
+                      </button>
+                    </div>
+                  </div>
+
+                  {recoveryError && (
+                    <span className="text-[10px] font-bold text-tactical-red font-mono uppercase">
+                      {recoveryError}
+                    </span>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isRecovering}
+                    className="w-full py-2.5 bg-tactical-green text-black font-semibold text-xs rounded hover:bg-tactical-green/95 transition-all text-center tracking-widest flex items-center justify-center gap-2 uppercase active:scale-[0.98] cursor-pointer"
+                  >
+                    {isRecovering ? (
+                      <RefreshCcw className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <span>⚙️ ATIVAR E RECOMPOR PERFIL</span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => signOut(auth)}
+                    className="w-full py-2 border border-tactical-red/30 hover:border-tactical-red hover:bg-tactical-red/10 text-tactical-red font-semibold text-[10px] rounded transition-all text-center tracking-widest uppercase active:scale-[0.98] cursor-pointer"
+                  >
+                    SAIR DA CONTA (MUDAR DE E-MAIL)
+                  </button>
+                </form>
+              </div>
+            ) : (
+              <div key="loading-profile" className="flex flex-col h-full items-center justify-center z-10 gap-4">
+                 <RefreshCcw className="w-8 h-8 text-tactical-green animate-spin" />
+                 <span className="text-[10px] font-bold tracking-widest text-tactical-green animate-pulse uppercase">Recuperando Perfil Tático...</span>
+              </div>
+            )
           )}
         </AnimatePresence>
       </div>
@@ -387,14 +524,45 @@ export default function App() {
                   <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div className="text-center flex-1">
-                  <h2 className="text-sm font-bold text-tactical-green">{selectedChannel.name}</h2>
-                  <p className="text-[10px] opacity-50 uppercase flex items-center justify-center gap-2">
+                  <div className="flex items-center justify-center gap-2">
+                    {isRxActive && (
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-tactical-amber opacity-75 shadow-[0_0_8px_#f59e0b]"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-tactical-amber shadow-[0_0_8px_#f59e0b]"></span>
+                      </span>
+                    )}
+                    <h2 className={cn("text-sm font-bold transition-all duration-300", isRxActive ? "text-tactical-amber animate-pulse" : "text-tactical-green")}>
+                      {selectedChannel.name}
+                    </h2>
+                  </div>
+                  <p className="text-[10px] opacity-50 uppercase flex items-center justify-center gap-2 mt-0.5">
                     <Lock className="w-2.5 h-2.5" /> E2EE • {selectedChannel.ops} OPS • {isRxActive ? 'RECEBENDO' : 'IDLE'}
                   </p>
                 </div>
-                <div className="w-10 h-10 rounded border border-tactical-green/30 flex items-center justify-center flex-col gap-0.5">
-                   <Eye className="w-3 h-3 text-tactical-green" />
-                   <span className="text-[8px] font-bold">ATIVO</span>
+                <div className="flex items-center gap-2">
+                  {/* Glowing RX LED Banner */}
+                  {isRxActive && (
+                    <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded bg-tactical-amber/10 border border-tactical-amber/30 animate-pulse">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-tactical-amber opacity-75 shadow-[0_0_8px_#f59e0b]"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-tactical-amber"></span>
+                      </span>
+                      <span className="text-[8px] font-mono font-bold text-tactical-amber tracking-widest">RX ACT</span>
+                    </div>
+                  )}
+                  <div className={cn(
+                    "w-10 h-10 rounded border flex items-center justify-center flex-col gap-0.5 transition-all duration-300",
+                    isRxActive ? "border-tactical-amber bg-tactical-amber/10 text-tactical-amber" : "border-tactical-green/30 text-tactical-green"
+                  )}>
+                     {isRxActive ? (
+                       <Volume2 className="w-3 h-3 text-tactical-amber animate-bounce" />
+                     ) : (
+                       <Eye className="w-3 h-3" />
+                     )}
+                     <span className="text-[8px] font-bold">
+                       {isRxActive ? 'RX' : 'ATIVO'}
+                     </span>
+                  </div>
                 </div>
               </div>
 
